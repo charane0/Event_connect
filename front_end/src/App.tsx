@@ -37,7 +37,7 @@ type Screen =
   | 'payment-confirmation'
   | 'my-bookings'
   | 'chat-list'
-  | 'vendor-onboarding'
+  | 'vendor-verification'
   | 'vendor-pending-approval'
   | 'vendor-dashboard'
   | 'manage-bookings'
@@ -50,6 +50,8 @@ export default function App() {
   const [userRole, setUserRole] = useState<UserRole>('customer');
   const [selectedVendor, setSelectedVendor] = useState<any>(null);
   const [isNewVendor, setIsNewVendor] = useState(false);
+  const [vendorId, setVendorId] = useState<string | null>(null);
+  const [vendorData, setVendorData] = useState<any>(null);
 
   const handleGetStarted = () => {
     setCurrentScreen('role-selection');
@@ -66,9 +68,13 @@ export default function App() {
     } else {
       // For vendors, check if they're new users signing up
       if (isNewUser) {
-        // New vendor - go through onboarding
+        // New vendor - go through 5-step verification
         setIsNewVendor(true);
-        setCurrentScreen('vendor-onboarding');
+        const vid = localStorage.getItem('vendorId');
+        if (vid) {
+          setVendorId(vid);
+          setCurrentScreen('vendor-verification');
+        }
       } else {
         // Existing vendor - go to dashboard
         setCurrentScreen('vendor-dashboard');
@@ -184,15 +190,20 @@ export default function App() {
       )}
 
       {/* Vendor Screens */}
-      {currentScreen === 'vendor-onboarding' && (
+      {currentScreen === 'vendor-verification' && vendorId && (
         <VendorOnboarding
-          onComplete={() => setCurrentScreen('vendor-pending-approval')}
+          vendorId={vendorId}
+          onComplete={(vendor) => {
+            setVendorData(vendor);
+            setCurrentScreen('vendor-pending-approval');
+          }}
           onBack={() => setCurrentScreen('login')}
         />
       )}
 
       {currentScreen === 'vendor-pending-approval' && (
         <VendorPendingApproval
+          vendorData={vendorData}
           onBackToHome={() => setCurrentScreen('splash')}
         />
       )}

@@ -5,9 +5,10 @@ import { Card, CardContent } from '../ui/card';
 
 interface VendorPendingApprovalProps {
   onBackToHome: () => void;
+  vendorData?: any;
 }
 
-export default function VendorPendingApproval({ onBackToHome }: VendorPendingApprovalProps) {
+export default function VendorPendingApproval({ onBackToHome, vendorData }: VendorPendingApprovalProps) {
   return (
     <div className="min-h-screen flex flex-col items-center justify-center px-6 bg-gradient-to-br from-orange-50 to-amber-50">
       {/* Animated Clock Icon */}
@@ -62,11 +63,51 @@ export default function VendorPendingApproval({ onBackToHome }: VendorPendingApp
             <div className="text-center mb-6">
               <div className="inline-block bg-orange-50 rounded-2xl px-6 py-3 mb-4">
                 <p className="text-sm text-gray-600 mb-1">Application ID</p>
-                <p className="text-2xl text-orange-600">#VND{Math.floor(Math.random() * 100000)}</p>
+                <p className="text-2xl text-orange-600">#VND{vendorData?._id?.slice(-6).toUpperCase() || Math.floor(Math.random() * 100000)}</p>
               </div>
+              {vendorData?.businessName && (
+                <div className="mt-4 p-3 bg-blue-50 rounded-xl">
+                  <p className="text-sm text-gray-600">Business Name</p>
+                  <p className="text-lg font-semibold text-gray-900">{vendorData.businessName}</p>
+                </div>
+              )}
             </div>
 
             <div className="space-y-4">
+              {vendorData && (
+                <div className="grid grid-cols-2 gap-3 mb-4 p-4 bg-gray-50 rounded-xl">
+                  {vendorData.ownerName && (
+                    <div>
+                      <p className="text-xs text-gray-600">Owner</p>
+                      <p className="text-sm font-semibold text-gray-900">{vendorData.ownerName}</p>
+                    </div>
+                  )}
+                  {vendorData.category && (
+                    <div>
+                      <p className="text-xs text-gray-600">Category</p>
+                      <p className="text-sm font-semibold text-gray-900">{vendorData.category}</p>
+                    </div>
+                  )}
+                  {vendorData.email && (
+                    <div>
+                      <p className="text-xs text-gray-600">Email</p>
+                      <p className="text-sm font-semibold text-gray-900">{vendorData.email}</p>
+                    </div>
+                  )}
+                  {vendorData.phone && (
+                    <div>
+                      <p className="text-xs text-gray-600">Phone</p>
+                      <p className="text-sm font-semibold text-gray-900">{vendorData.phone}</p>
+                    </div>
+                  )}
+                  {vendorData.city && (
+                    <div className="col-span-2">
+                      <p className="text-xs text-gray-600">Location</p>
+                      <p className="text-sm font-semibold text-gray-900">{vendorData.city}, {vendorData.state} {vendorData.pincode}</p>
+                    </div>
+                  )}
+                </div>
+              )}
               <div className="flex items-center gap-4 p-4 bg-gray-50 rounded-xl">
                 <div className="w-10 h-10 bg-orange-100 rounded-full flex items-center justify-center flex-shrink-0">
                   <CheckCircle className="w-5 h-5 text-orange-600" />

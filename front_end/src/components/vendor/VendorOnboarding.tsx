@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import React, { useState } from 'react';
 import { motion } from 'motion/react';
 import { ArrowLeft, ArrowRight, Upload, CheckCircle, Building, User, MapPin, Briefcase, FileText, Camera, Phone, Mail } from 'lucide-react';
 import { Button } from '../ui/button';
@@ -10,8 +10,9 @@ import { Progress } from '../ui/progress';
 import { Checkbox } from '../ui/checkbox';
 
 interface VendorOnboardingProps {
-  onComplete: () => void;
+  onComplete: (vendorData?: any) => void;
   onBack: () => void;
+  vendorId?: string;
 }
 
 const categories = [
@@ -27,8 +28,15 @@ const categories = [
   'Entertainment',
 ];
 
-export default function VendorOnboarding({ onComplete, onBack }: VendorOnboardingProps) {
+export default function VendorOnboarding({ onComplete, onBack, vendorId: propVendorId }: VendorOnboardingProps) {
   const [step, setStep] = useState(1);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
+  const apiUrl = (import.meta as any).env.VITE_API_URL || 'http://localhost:5000/api';
+  const token = localStorage.getItem('authToken');
+  const vendorId = propVendorId || localStorage.getItem('vendorId');
+
   const [formData, setFormData] = useState({
     businessName: '',
     ownerName: '',
@@ -51,11 +59,119 @@ export default function VendorOnboarding({ onComplete, onBack }: VendorOnboardin
   const totalSteps = 5;
   const progress = (step / totalSteps) * 100;
 
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>, fieldName: string) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setFormData((prev: any) => ({ ...prev, [fieldName]: reader.result as string }));
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handlePortfolioImages = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []) as File[];
+    let loadedCount = 0;
+    const newImages: string[] = [...formData.portfolioImages];
+
+    if (newImages.length >= 6) {
+      setError('Maximum 6 portfolio images allowed');
+      return;
+    }
+
+    files.forEach((file: File) => {
+      if (newImages.length >= 6) return;
+
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        newImages.push(reader.result as string);
+        loadedCount++;
+        if (loadedCount === files.length) {
+          setFormData((prev: any) => ({ ...prev, portfolioImages: newImages }));
+        }
+      };
+      reader.readAsDataURL(file);
+    });
+  };
+
+  const handleSubmit = async () => {
+    setError('');
+    setSuccess('');
+
+    if (!vendorId) {
+      setError('Vendor ID not found. Please log in again.');
+      return;
+    }
+
+    if (!formData.termsAccepted) {
+      setError('Please accept the terms and conditions');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      console.log('Submitting vendor data with vendorId:', vendorId);
+      console.log('Token available:', !!token);
+      
+      const response = await fetch(`${apiUrl}/vendors/onboarding/submit/${vendorId}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          businessName: formData.businessName,
+          ownerName: formData.ownerName,
+          category: formData.category,
+          yearsExperience: formData.yearsExperience,
+          description: formData.description,
+          phone: formData.phone,
+          email: formData.email,
+          address: formData.address,
+          city: formData.city,
+          state: formData.state,
+          pincode: formData.pincode,
+          gstin: formData.gstin,
+          businessLicense: formData.businessLicense,
+          portfolioImages: formData.portfolioImages,
+          servicesOffered: formData.servicesOffered,
+          termsAccepted: formData.termsAccepted,
+        }),
+      });
+
+      console.log('Response status:', response.status);
+      const data = await response.json();
+      console.log('Response data:', data);
+      
+      if (!response.ok) {
+        setError(data.message || `Server error: ${response.status}`);
+        return;
+      }
+      
+      if (data.success) {
+        setSuccess('Application submitted successfully!');
+        console.log('Calling onComplete with vendor data:', data.vendor);
+        setTimeout(() => {
+          onComplete(data.vendor);
+        }, 1500);
+      } else {
+        setError(data.message || 'Error submitting application');
+      }
+    } catch (err: any) {
+      console.error('Submission error:', err);
+      setError('Network error: ' + (err?.message || 'Unknown error'));
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleNext = () => {
     if (step < totalSteps) {
       setStep(step + 1);
+      setError('');
     } else {
-      onComplete();
+      handleSubmit();
     }
   };
 
@@ -68,7 +184,7 @@ export default function VendorOnboarding({ onComplete, onBack }: VendorOnboardin
   };
 
   const updateFormData = (key: string, value: any) => {
-    setFormData(prev => ({ ...prev, [key]: value }));
+    setFormData((prev: any) => ({ ...prev, [key]: value }));
   };
 
   return (
@@ -90,6 +206,20 @@ export default function VendorOnboarding({ onComplete, onBack }: VendorOnboardin
 
         {/* Progress Bar */}
         <Progress value={progress} className="h-2 bg-white/20" />
+      </div>
+
+      {/* Messages */}
+      <div className="px-6 pt-4">
+        {error && (
+          <div className="mb-4 p-4 bg-red-100 border border-red-400 text-red-700 rounded-lg">
+            {error}
+          </div>
+        )}
+        {success && (
+          <div className="mb-4 p-4 bg-green-100 border border-green-400 text-green-700 rounded-lg">
+            {success}
+          </div>
+        )}
       </div>
 
       {/* Content */}
@@ -120,7 +250,7 @@ export default function VendorOnboarding({ onComplete, onBack }: VendorOnboardin
                 <Input
                   id="businessName"
                   value={formData.businessName}
-                  onChange={(e) => updateFormData('businessName', e.target.value)}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateFormData('businessName', e.target.value)}
                   placeholder="e.g., Royal Caterers"
                   className="rounded-3xl mt-2 border-gray-200/80"
                 />
@@ -133,7 +263,7 @@ export default function VendorOnboarding({ onComplete, onBack }: VendorOnboardin
                 <Input
                   id="ownerName"
                   value={formData.ownerName}
-                  onChange={(e) => updateFormData('ownerName', e.target.value)}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateFormData('ownerName', e.target.value)}
                   placeholder="Enter full name"
                   className="rounded-3xl mt-2 border-gray-200/80"
                 />
@@ -143,7 +273,7 @@ export default function VendorOnboarding({ onComplete, onBack }: VendorOnboardin
                 <Label htmlFor="category" className="text-gray-700 mb-2">
                   Business Category *
                 </Label>
-                <Select value={formData.category} onValueChange={(value) => updateFormData('category', value)}>
+                <Select value={formData.category} onValueChange={(value: string) => updateFormData('category', value)}>
                   <SelectTrigger className="rounded-3xl mt-2 border-gray-200/80">
                     <SelectValue placeholder="Select your service category" />
                   </SelectTrigger>
@@ -165,7 +295,7 @@ export default function VendorOnboarding({ onComplete, onBack }: VendorOnboardin
                   id="yearsExperience"
                   type="number"
                   value={formData.yearsExperience}
-                  onChange={(e) => updateFormData('yearsExperience', e.target.value)}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateFormData('yearsExperience', e.target.value)}
                   placeholder="e.g., 5"
                   className="rounded-3xl mt-2 border-gray-200/80"
                 />
@@ -178,7 +308,7 @@ export default function VendorOnboarding({ onComplete, onBack }: VendorOnboardin
                 <Textarea
                   id="description"
                   value={formData.description}
-                  onChange={(e) => updateFormData('description', e.target.value)}
+                  onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => updateFormData('description', e.target.value)}
                   placeholder="Describe your business, services, and what makes you unique..."
                   className="rounded-3xl mt-2 min-h-[120px] border-gray-200/80"
                 />
@@ -222,7 +352,7 @@ export default function VendorOnboarding({ onComplete, onBack }: VendorOnboardin
                     id="phone"
                     type="tel"
                     value={formData.phone}
-                    onChange={(e) => updateFormData('phone', e.target.value)}
+                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateFormData('phone', e.target.value)}
                     placeholder="+91 98765 43210"
                     className="rounded-3xl pl-11 border-gray-200/80"
                   />
@@ -239,7 +369,7 @@ export default function VendorOnboarding({ onComplete, onBack }: VendorOnboardin
                     id="email"
                     type="email"
                     value={formData.email}
-                    onChange={(e) => updateFormData('email', e.target.value)}
+                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateFormData('email', e.target.value)}
                     placeholder="your.email@example.com"
                     className="rounded-3xl pl-11 border-gray-200/80"
                   />
@@ -253,7 +383,7 @@ export default function VendorOnboarding({ onComplete, onBack }: VendorOnboardin
                 <Textarea
                   id="address"
                   value={formData.address}
-                  onChange={(e) => updateFormData('address', e.target.value)}
+                  onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => updateFormData('address', e.target.value)}
                   placeholder="Enter complete business address"
                   className="rounded-3xl mt-2 min-h-[80px] border-gray-200/80"
                 />
@@ -267,7 +397,7 @@ export default function VendorOnboarding({ onComplete, onBack }: VendorOnboardin
                   <Input
                     id="city"
                     value={formData.city}
-                    onChange={(e) => updateFormData('city', e.target.value)}
+                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateFormData('city', e.target.value)}
                     placeholder="Mumbai"
                     className="rounded-3xl mt-2 border-gray-200/80"
                   />
@@ -279,7 +409,7 @@ export default function VendorOnboarding({ onComplete, onBack }: VendorOnboardin
                   <Input
                     id="state"
                     value={formData.state}
-                    onChange={(e) => updateFormData('state', e.target.value)}
+                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateFormData('state', e.target.value)}
                     placeholder="Maharashtra"
                     className="rounded-3xl mt-2 border-gray-200/80"
                   />
@@ -293,7 +423,7 @@ export default function VendorOnboarding({ onComplete, onBack }: VendorOnboardin
                 <Input
                   id="pincode"
                   value={formData.pincode}
-                  onChange={(e) => updateFormData('pincode', e.target.value)}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateFormData('pincode', e.target.value)}
                   placeholder="400001"
                   className="rounded-3xl mt-2 border-gray-200/80"
                 />
@@ -328,7 +458,7 @@ export default function VendorOnboarding({ onComplete, onBack }: VendorOnboardin
                 <Input
                   id="gstin"
                   value={formData.gstin}
-                  onChange={(e) => updateFormData('gstin', e.target.value)}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateFormData('gstin', e.target.value)}
                   placeholder="e.g., 27XXXXX1234X1Z5"
                   className="rounded-3xl mt-2 border-gray-200/80"
                 />
@@ -341,31 +471,29 @@ export default function VendorOnboarding({ onComplete, onBack }: VendorOnboardin
                 <Label className="text-gray-700 mb-2">
                   Business License / Registration *
                 </Label>
-                <div className="mt-2 border-2 border-dashed border-gray-200 rounded-3xl p-6 text-center hover:border-orange-300 transition-colors cursor-pointer bg-gray-50/50">
-                  <Upload className="w-12 h-12 text-gray-300 mx-auto mb-3" />
-                  <p className="text-gray-900 mb-1">Upload Business License</p>
-                  <p className="text-xs text-gray-500 mb-4">
-                    PDF, JPG or PNG (Max 5MB)
-                  </p>
-                  <div className="inline-flex items-center px-6 py-2 rounded-full bg-white border border-orange-200 text-orange-600 shadow-sm hover:shadow transition-all cursor-pointer">
-                    Choose File
-                  </div>
-                </div>
-              </div>
-
-              <div>
-                <Label className="text-gray-700 mb-2">
-                  Additional Documents (Optional)
-                </Label>
-                <div className="mt-2 border-2 border-dashed border-gray-200 rounded-3xl p-6 text-center hover:border-orange-300 transition-colors cursor-pointer bg-gray-50/50">
-                  <Upload className="w-12 h-12 text-gray-300 mx-auto mb-3" />
-                  <p className="text-gray-900 mb-1">Upload Additional Documents</p>
-                  <p className="text-xs text-gray-500 mb-4">
-                    GST Certificate, Pan Card, etc.
-                  </p>
-                  <div className="inline-flex items-center px-6 py-2 rounded-full bg-white border border-orange-200 text-orange-600 shadow-sm hover:shadow transition-all cursor-pointer">
-                    Choose File
-                  </div>
+                <div className="relative">
+                  <input
+                    type="file"
+                    onChange={(e) => handleFileUpload(e, 'businessLicense')}
+                    accept=".pdf,.jpg,.jpeg,.png"
+                    className="hidden"
+                    id="businessLicenseUpload"
+                  />
+                  <label htmlFor="businessLicenseUpload" className="block">
+                    <div className="mt-2 border-2 border-dashed border-gray-200 rounded-3xl p-6 text-center hover:border-orange-300 transition-colors cursor-pointer bg-gray-50/50">
+                      <Upload className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+                      <p className="text-gray-900 mb-1">Upload Business License</p>
+                      <p className="text-xs text-gray-500 mb-4">
+                        PDF, JPG or PNG (Max 5MB)
+                      </p>
+                      <div className="inline-flex items-center px-6 py-2 rounded-full bg-white border border-orange-200 text-orange-600 shadow-sm hover:shadow transition-all cursor-pointer">
+                        Choose File
+                      </div>
+                      {formData.businessLicense && (
+                        <p className="text-xs text-green-600 mt-2">✓ File uploaded</p>
+                      )}
+                    </div>
+                  </label>
                 </div>
               </div>
 
@@ -399,16 +527,41 @@ export default function VendorOnboarding({ onComplete, onBack }: VendorOnboardin
             <div className="bg-white rounded-3xl shadow-sm p-6 border border-gray-100/70 space-y-6">
               <div>
                 <Label className="text-gray-700 mb-3">
-                  Upload Portfolio Images *
+                  Upload Portfolio Images * ({formData.portfolioImages.length}/6)
                 </Label>
                 <div className="grid grid-cols-3 gap-3">
                   {[1, 2, 3, 4, 5, 6].map((idx) => (
                     <div
                       key={idx}
-                      className="aspect-square border-2 border-dashed border-gray-200 rounded-3xl flex flex-col items-center justify-center cursor-pointer hover:border-orange-300 transition-colors bg-gray-50/50"
+                      className="relative aspect-square border-2 border-dashed border-gray-200 rounded-3xl flex flex-col items-center justify-center cursor-pointer hover:border-orange-300 transition-colors bg-gray-50/50 overflow-hidden"
                     >
-                      <Upload className="w-8 h-8 text-gray-300 mb-2" />
-                      <span className="text-xs text-gray-500">Upload</span>
+                      {formData.portfolioImages[idx - 1] ? (
+                        <div className="w-full h-full relative">
+                          <img
+                            src={formData.portfolioImages[idx - 1]}
+                            alt={`Portfolio ${idx}`}
+                            className="w-full h-full object-cover"
+                          />
+                          <label
+                            htmlFor={`portfolio-${idx}`}
+                            className="absolute inset-0 bg-black/40 flex items-center justify-center cursor-pointer hover:bg-black/50 transition-all"
+                          >
+                            <Upload className="w-6 h-6 text-white" />
+                          </label>
+                        </div>
+                      ) : (
+                        <label htmlFor={`portfolio-${idx}`} className="w-full h-full flex flex-col items-center justify-center cursor-pointer">
+                          <Upload className="w-8 h-8 text-gray-300 mb-2" />
+                          <span className="text-xs text-gray-500">Upload</span>
+                        </label>
+                      )}
+                      <input
+                        id={`portfolio-${idx}`}
+                        type="file"
+                        onChange={(e) => handlePortfolioImages(e)}
+                        accept="image/*"
+                        className="hidden"
+                      />
                     </div>
                   ))}
                 </div>
@@ -431,7 +584,20 @@ export default function VendorOnboarding({ onComplete, onBack }: VendorOnboardin
                     'Emergency Support',
                   ].map((service) => (
                     <div key={service} className="flex items-center space-x-2">
-                      <Checkbox id={service} />
+                      <Checkbox
+                        id={service}
+                        checked={formData.servicesOffered.includes(service)}
+                        onCheckedChange={(checked) => {
+                          if (checked) {
+                            updateFormData('servicesOffered', [...formData.servicesOffered, service]);
+                          } else {
+                            updateFormData(
+                              'servicesOffered',
+                              formData.servicesOffered.filter((s: string) => s !== service)
+                            );
+                          }
+                        }}
+                      />
                       <label
                         htmlFor={service}
                         className="text-sm text-gray-700 cursor-pointer"
@@ -569,11 +735,11 @@ export default function VendorOnboarding({ onComplete, onBack }: VendorOnboardin
       <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 p-4 shadow-lg z-10">
         <Button
           onClick={handleNext}
-          disabled={step === 5 && !formData.termsAccepted}
+          disabled={(step === 5 && !formData.termsAccepted) || loading}
           className="w-full bg-gradient-to-r from-orange-500 to-amber-600 hover:from-orange-600 hover:to-amber-700 py-6 rounded-3xl disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          {step === 5 ? 'Submit Application' : 'Continue'}
-          {step !== 5 && <ArrowRight className="w-5 h-5 ml-2" />}
+          {loading ? 'Submitting...' : step === 5 ? 'Submit Application' : 'Continue'}
+          {!loading && step !== 5 && <ArrowRight className="w-5 h-5 ml-2" />}
         </Button>
       </div>
     </div>
